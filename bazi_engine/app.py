@@ -70,7 +70,7 @@ def calculate_bazi_endpoint(req: BaziRequest):
         res = compute_bazi(inp)
         
         return {
-            "input": req.dict(),
+            "input": req.model_dump(),
             "pillars": {
                 "year": str(res.pillars.year),
                 "month": str(res.pillars.month),
@@ -99,7 +99,7 @@ def calculate_western_endpoint(req: WesternRequest):
         chart = compute_western_chart(dt_utc, req.lat, req.lon)
         return chart
     except Exception as e:
-         raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
