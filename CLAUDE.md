@@ -332,7 +332,7 @@ pytest --tb=short                   # Short traceback
    - Enables future Skyfield integration
    - Testable backend abstraction
 
-3. **Bisection Algorithm** (bazi_engine/jieqi.py:34)
+3. **Bisection Algorithm** (bazi_engine/jieqi.py:42)
    - Generic solar longitude crossing finder
    - Fallback when `solcross_ut()` unavailable
    - Configurable accuracy (default: 1 second)
