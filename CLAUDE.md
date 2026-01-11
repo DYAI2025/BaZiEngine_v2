@@ -804,7 +804,7 @@ BaziInput(
 - Typically around February 3-5 (varies by year)
 - Timezone matters: Berlin LiChun ≠ Beijing LiChun
 
-**Example** (bazi_engine/bazi.py:63):
+**Example** (`bazi_engine/bazi.py`:69–74):
 ```python
 # 2024-02-04T09:26:00 Berlin (BEFORE LiChun at 09:27)
 solar_year = 2023  # GuiMao year (2023)
