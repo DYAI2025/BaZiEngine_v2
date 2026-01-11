@@ -77,7 +77,7 @@ cli.py (imports bazi.py)
 
 ### Entry Point
 
-The main entry point is `compute_bazi()` in `bazi_engine/bazi.py:45`:
+The main entry point is `compute_bazi()` in `bazi_engine/bazi.py:46`:
 
 ```python
 from bazi_engine import compute_bazi, BaziInput
