@@ -1232,13 +1232,12 @@ print(f"UTC:   {dt_utc}")
 print(f"Offset: {dt_local.utcoffset()}")
 
 # Test DST transitions
-dst_spring = datetime(2024, 3, 31, 2, 30, 0)  # Nonexistent
+dst_spring = datetime(2024, 3, 31, 2, 30, 0)  # Nonexistent (in some tz rules)
 dst_fall = datetime(2024, 10, 27, 2, 30, 0)    # Ambiguous
 
-try:
-    ZoneInfo("Europe/Berlin").localize(dst_spring)
-except Exception as e:
-    print(f"Spring forward error: {e}")
+# With zoneinfo, make the naive time "aware" via replace(tzinfo=...)
+dst_spring_aware = dst_spring.replace(tzinfo=tz)
+print(f"Spring forward (aware): {dst_spring_aware} UTC offset {dst_spring_aware.utcoffset()}")
 
 # Use fold parameter for ambiguous times
 dt_fall_0 = datetime(2024, 10, 27, 2, 30, 0, fold=0, tzinfo=tz)
