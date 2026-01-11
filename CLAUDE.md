@@ -342,8 +342,9 @@ pytest --tb=short                   # Short traceback
          backend: EphemerisBackend,
          target_lon_deg: float,
          jd_start_ut: float,
-         jd_end_ut: float,
-         accuracy_seconds: float = 1.0
+         *,
+         accuracy_seconds: float,
+         max_span_days: float = 40.0,
      ) -> float:
          # Generic bisection implementation
      ```
