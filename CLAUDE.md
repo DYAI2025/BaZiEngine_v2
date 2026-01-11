@@ -1413,7 +1413,7 @@ From `bazi_engine/types.py:51-56`, these fields are already defined but not impl
 ## QUICK REFERENCE CHEAT SHEET
 
 ### Most Important Files
-- **Main entry point**: `bazi_engine/bazi.py:45` (`compute_bazi()`)
+- **Main entry point**: `bazi_engine/bazi.py:46` (`compute_bazi()`)
 - **Data types**: `bazi_engine/types.py`
 - **Constants**: `bazi_engine/constants.py` (STEMS, BRANCHES, DAY_OFFSET=49)
 - **Tests**: `tests/test_golden.py`, `tests/test_invariants.py`
