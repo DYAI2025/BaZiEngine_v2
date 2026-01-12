@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for baziengine-v2 on 2026-01-08T13:32:22Z
+# fly.toml app configuration file generated for baziengine-v2 on 2026-01-12T23:04:43Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -11,11 +11,9 @@ primary_region = 'fra'
 [http_service]
   internal_port = 8080
   force_https = true
-  idle_timeout = 3600
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  idle_timeout = 3600
   processes = ['app']
 
 [[vm]]
