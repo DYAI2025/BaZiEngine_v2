@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional, Protocol
+import os
+import urllib.request
 
 import swisseph as swe
 
@@ -27,8 +31,8 @@ class SwissEphBackend:
     ephe_path: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if self.ephe_path:
-            swe.set_ephe_path(self.ephe_path)
+        path = ensure_ephemeris_files(self.ephe_path)
+        swe.set_ephe_path(path)
 
     def delta_t_seconds(self, jd_ut: float) -> float:
         return swe.deltat(jd_ut) * 86400.0
@@ -68,3 +72,27 @@ def jd_ut_to_datetime_utc(jd_ut: float) -> datetime:
         hour += 1
     base = datetime(y, m, d, 0, 0, 0, 0, tzinfo=timezone.utc)
     return base + timedelta(hours=hour, minutes=minute, seconds=second, microseconds=micro)
+
+EPHEMERIS_FILES = {
+    "sepl_18.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/sepl_18.se1",
+    "semo_18.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/semo_18.se1",
+    "seas_18.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/seas_18.se1",
+    "seplm06.se1": "https://www.astro.com/ftp/swisseph/ephe/seplm06.se1",
+}
+
+def _resolve_ephe_path(ephe_path: Optional[str]) -> Path:
+    return Path(ephe_path or os.environ.get("SE_EPHE_PATH") or "/usr/local/share/swisseph")
+
+@lru_cache(maxsize=1)
+def ensure_ephemeris_files(ephe_path: Optional[str] = None) -> str:
+    path = _resolve_ephe_path(ephe_path)
+    path.mkdir(parents=True, exist_ok=True)
+    missing = [name for name in EPHEMERIS_FILES if not (path / name).exists()]
+    if not missing:
+        return str(path)
+    for name in missing:
+        url = EPHEMERIS_FILES[name]
+        destination = path / name
+        with urllib.request.urlopen(url, timeout=30) as response:
+            destination.write_bytes(response.read())
+    return str(path)

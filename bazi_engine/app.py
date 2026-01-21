@@ -7,12 +7,17 @@ from .types import BaziInput
 from .bazi import compute_bazi
 from .western import compute_western_chart
 from .time_utils import parse_local_iso
+from .ephemeris import ensure_ephemeris_files
 
 app = FastAPI(
     title="BaZi Engine v2 API",
     description="API for BaZi (Chinese Astrology) and Basic Western Astrology calculations.",
     version="0.2.0"
 )
+
+@app.on_event("startup")
+def ensure_ephemeris_data() -> None:
+    ensure_ephemeris_files()
 
 class BaziRequest(BaseModel):
     date: str = Field(..., description="ISO 8601 local date time (e.g. 2024-02-10T14:30:00)")
