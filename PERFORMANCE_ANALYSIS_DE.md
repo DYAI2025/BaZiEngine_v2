@@ -10,8 +10,8 @@
   cpus = 1
 
 [http_service]
-  min_machines_running = 0
-  auto_stop_machines = 'stop'
+  min_machines_running = 1
+  auto_stop_machines = false
   auto_start_machines = true
 ```
 
