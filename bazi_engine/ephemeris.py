@@ -77,7 +77,7 @@ EPHEMERIS_FILES = {
     "sepl_18.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/sepl_18.se1",
     "semo_18.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/semo_18.se1",
     "seas_18.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/seas_18.se1",
-    "seplm06.se1": "https://www.astro.com/ftp/swisseph/ephe/seplm06.se1",
+    "seplm06.se1": "https://github.com/aloistr/swisseph/raw/master/ephe/seplm06.se1",
 }
 
 def _resolve_ephe_path(ephe_path: Optional[str]) -> Path:
