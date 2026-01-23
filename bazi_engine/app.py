@@ -170,7 +170,7 @@ def calculate_bazi_endpoint(req: BaziRequest):
             fold=0
         )
         res = compute_bazi(inp)
-        
+
         return {
             "input": req.model_dump(),
             "pillars": {
@@ -178,6 +178,16 @@ def calculate_bazi_endpoint(req: BaziRequest):
                 "month": format_pillar(res.pillars.month),
                 "day": format_pillar(res.pillars.day),
                 "hour": format_pillar(res.pillars.hour),
+            },
+            "chinese": {
+                "year": {
+                    "stem": STEMS[res.pillars.year.stem_index],
+                    "branch": BRANCHES[res.pillars.year.branch_index],
+                    "animal": ANIMALS[res.pillars.year.branch_index],
+                },
+                "month_master": STEMS[res.pillars.month.stem_index],
+                "day_master": STEMS[res.pillars.day.stem_index],
+                "hour_master": STEMS[res.pillars.hour.stem_index],
             },
             "dates": {
                 "birth_local": res.birth_local_dt.isoformat(),
