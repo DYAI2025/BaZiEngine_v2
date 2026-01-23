@@ -30,3 +30,54 @@ Options:
 
 ## Tests
 pytest -q
+
+## GitHub Actions API (extern erreichbar)
+Die BaZi Engine kann über GitHub Actions on-demand berechnet werden. Der Workflow liefert BaZi + Ephemeriden (westliche Planetenpositionen) als JSON im Workflow-Run Summary und als Artifact.
+
+Workflow: `.github/workflows/bazi_engine_actions.yml`
+
+### Auslösung via `workflow_dispatch`
+Beispiel (GitHub REST API, benötigt `repo`-Token):
+
+```bash
+curl -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer <GITHUB_TOKEN>" \
+  https://api.github.com/repos/<OWNER>/<REPO>/actions/workflows/bazi_engine_actions.yml/dispatches \
+  -d '{
+    "ref": "main",
+    "inputs": {
+      "date": "2024-02-10T14:30:00",
+      "tz": "Europe/Berlin",
+      "lon": "13.4050",
+      "lat": "52.52",
+      "standard": "CIVIL",
+      "boundary": "midnight",
+      "strict": "true"
+    }
+  }'
+```
+
+### Auslösung via `repository_dispatch`
+```bash
+curl -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer <GITHUB_TOKEN>" \
+  https://api.github.com/repos/<OWNER>/<REPO>/dispatches \
+  -d '{
+    "event_type": "bazi_engine",
+    "client_payload": {
+      "date": "2024-02-10T14:30:00",
+      "tz": "Europe/Berlin",
+      "lon": "13.4050",
+      "lat": "52.52",
+      "standard": "CIVIL",
+      "boundary": "midnight",
+      "strict": "true"
+    }
+  }'
+```
+
+### Ergebnis abrufen
+* Workflow Summary enthält das JSON-Ergebnis.
+* Artifact `bazi-engine-result` enthält `action_result.json`.

@@ -1,0 +1,112 @@
+name: BaZi Engine API
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "ISO 8601 local datetime (e.g. 2024-02-10T14:30:00)"
+        required: true
+        type: string
+      tz:
+        description: "Timezone name"
+        required: false
+        default: "Europe/Berlin"
+        type: string
+      lon:
+        description: "Longitude in degrees"
+        required: false
+        default: "13.4050"
+        type: string
+      lat:
+        description: "Latitude in degrees"
+        required: false
+        default: "52.52"
+        type: string
+      standard:
+        description: "Time standard (CIVIL or LMT)"
+        required: false
+        default: "CIVIL"
+        type: choice
+        options:
+          - CIVIL
+          - LMT
+      boundary:
+        description: "Day boundary (midnight or zi)"
+        required: false
+        default: "midnight"
+        type: choice
+        options:
+          - midnight
+          - zi
+      strict:
+        description: "Strict local time validation"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+  repository_dispatch:
+    types: [bazi_engine]
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      INPUT_DATE: ${{ github.event.inputs.date || github.event.client_payload.date }}
+      INPUT_TZ: ${{ github.event.inputs.tz || github.event.client_payload.tz || 'Europe/Berlin' }}
+      INPUT_LON: ${{ github.event.inputs.lon || github.event.client_payload.lon || '13.4050' }}
+      INPUT_LAT: ${{ github.event.inputs.lat || github.event.client_payload.lat || '52.52' }}
+      INPUT_STANDARD: ${{ github.event.inputs.standard || github.event.client_payload.standard || 'CIVIL' }}
+      INPUT_BOUNDARY: ${{ github.event.inputs.boundary || github.event.client_payload.boundary || 'midnight' }}
+      INPUT_STRICT: ${{ github.event.inputs.strict || github.event.client_payload.strict || 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run calculation
+        id: calc
+        run: |
+          STRICT_FLAG=""
+          if [ "${INPUT_STRICT}" = "false" ]; then
+            STRICT_FLAG="--no-strict"
+          fi
+
+          python scripts/action_compute.py \
+            --date "${INPUT_DATE}" \
+            --tz "${INPUT_TZ}" \
+            --lon "${INPUT_LON}" \
+            --lat "${INPUT_LAT}" \
+            --standard "${INPUT_STANDARD}" \
+            --boundary "${INPUT_BOUNDARY}" \
+            ${STRICT_FLAG} \
+            --output "action_result.json"
+
+          echo "result_path=action_result.json" >> "$GITHUB_OUTPUT"
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: bazi-engine-result
+          path: ${{ steps.calc.outputs.result_path }}
+          if-no-files-found: error
+
+      - name: Publish summary
+        run: |
+          echo "# BaZi Engine Result" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "```json" >> "$GITHUB_STEP_SUMMARY"
+          cat action_result.json >> "$GITHUB_STEP_SUMMARY"
+          echo "```" >> "$GITHUB_STEP_SUMMARY"
