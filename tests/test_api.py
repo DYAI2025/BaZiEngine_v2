@@ -83,6 +83,14 @@ def test_legacy_api_endpoint_sun_sign():
     )
     assert resp.status_code == 200
     body = resp.json()
+
+    # Echoed input should match the request parameters
+    assert body["input"]["datum"] == "2024-02-10"
+    assert body["input"]["zeit"] == "14:30:00"
+    assert body["input"]["tz"] == "Europe/Berlin"
+    assert body["input"]["lat"] == 52.52
+    assert body["input"]["lon"] == 13.405
+
     assert body["sonne"] in {
         "Widder",
         "Stier",
