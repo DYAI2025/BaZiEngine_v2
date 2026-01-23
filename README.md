@@ -31,6 +31,21 @@ Options:
 ## Tests
 pytest -q
 
+## Webhook-Tool (HCI)
+Methode: POST  
+URL: https://baziengine-v2.fly.dev/calculate/bazi
+
+Body (JSON):
+```json
+{
+  "date": "{datum}",
+  "tz": "Europe/Berlin",
+  "lon": {lon},
+  "lat": {lat}
+}
+```
+Stelle sicher, dass `{datum}`, `{lon}` und `{lat}` aus dem User-Input kommen.
+
 ## GitHub Actions API (extern erreichbar)
 Die BaZi Engine kann über GitHub Actions on-demand berechnet werden. Der Workflow liefert BaZi + Ephemeriden (westliche Planetenpositionen) als JSON im Workflow-Run Summary und als Artifact.
 

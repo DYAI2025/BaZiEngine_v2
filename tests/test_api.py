@@ -26,10 +26,30 @@ def test_bazi_endpoint_success():
     resp = client.post("/calculate/bazi", json=payload)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["pillars"]["year"] == "JiaChen"
-    assert body["pillars"]["month"] == "BingYin"
-    assert body["pillars"]["day"] == "JiaChen"
-    assert body["pillars"]["hour"] == "XinWei"
+    assert body["pillars"]["year"] == {
+        "stamm": "Jia",
+        "zweig": "Chen",
+        "tier": "Drache",
+        "element": "Holz",
+    }
+    assert body["pillars"]["month"] == {
+        "stamm": "Bing",
+        "zweig": "Yin",
+        "tier": "Tiger",
+        "element": "Feuer",
+    }
+    assert body["pillars"]["day"] == {
+        "stamm": "Jia",
+        "zweig": "Chen",
+        "tier": "Drache",
+        "element": "Holz",
+    }
+    assert body["pillars"]["hour"] == {
+        "stamm": "Xin",
+        "zweig": "Wei",
+        "tier": "Ziege",
+        "element": "Metall",
+    }
     assert body["dates"]["birth_local"].startswith("2024-02-10T14:30:00")
 
 
