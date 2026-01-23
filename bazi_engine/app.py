@@ -1,8 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, Dict, Any
-from datetime import datetime
-
 from .types import BaziInput
 from .bazi import compute_bazi
 from .western import compute_western_chart
@@ -14,6 +12,21 @@ app = FastAPI(
     description="API for BaZi (Chinese Astrology) and Basic Western Astrology calculations.",
     version="0.2.0"
 )
+
+ZODIAC_SIGNS_DE = [
+    "Widder",
+    "Stier",
+    "Zwillinge",
+    "Krebs",
+    "Löwe",
+    "Jungfrau",
+    "Waage",
+    "Skorpion",
+    "Schütze",
+    "Steinbock",
+    "Wassermann",
+    "Fische",
+]
 
 @app.on_event("startup")
 def ensure_ephemeris_data() -> None:
@@ -58,6 +71,50 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/api")
+def api_endpoint(
+    datum: str = Query(..., description="Datum im Format YYYY-MM-DD"),
+    zeit: str = Query(..., description="Zeit im Format HH:MM[:SS]"),
+    ort: Optional[str] = Query(None, description="Ort als 'lat,lon' oder freier Text"),
+    tz: str = Query("Europe/Berlin", description="Timezone name"),
+    lon: float = Query(13.4050, description="Longitude in degrees"),
+    lat: float = Query(52.52, description="Latitude in degrees"),
+):
+    try:
+        if ort:
+            if "," in ort:
+                parts = [p.strip() for p in ort.split(",", maxsplit=1)]
+                if len(parts) == 2:
+                    lat = float(parts[0])
+                    lon = float(parts[1])
+            else:
+                raise ValueError("Ort muss als 'lat,lon' angegeben werden, wenn gesetzt.")
+
+        dt = parse_local_iso(f"{datum}T{zeit}", tz, strict=True, fold=0)
+        from datetime import timezone
+
+        dt_utc = dt.astimezone(timezone.utc)
+        chart = compute_western_chart(dt_utc, lat, lon)
+        sun = chart.get("bodies", {}).get("Sun")
+        if not sun or "zodiac_sign" not in sun:
+            raise ValueError("Sonnenposition konnte nicht berechnet werden.")
+        sign_index = int(sun["zodiac_sign"])
+        sign_name = ZODIAC_SIGNS_DE[sign_index]
+        return {
+            "sonne": sign_name,
+            "input": {
+                "datum": datum,
+                "zeit": zeit,
+                "ort": ort,
+                "tz": tz,
+                "lat": lat,
+                "lon": lon,
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/calculate/bazi")
 def calculate_bazi_endpoint(req: BaziRequest):

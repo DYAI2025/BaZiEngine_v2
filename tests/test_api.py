@@ -48,3 +48,32 @@ def test_western_endpoint_success():
     assert "Sun" in body["bodies"]
     assert "1" in body["houses"]
     assert "Ascendant" in body["angles"]
+
+
+def test_legacy_api_endpoint_sun_sign():
+    resp = client.get(
+        "/api",
+        params={
+            "datum": "2024-02-10",
+            "zeit": "14:30:00",
+            "tz": "Europe/Berlin",
+            "lat": 52.52,
+            "lon": 13.405,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sonne"] in {
+        "Widder",
+        "Stier",
+        "Zwillinge",
+        "Krebs",
+        "Löwe",
+        "Jungfrau",
+        "Waage",
+        "Skorpion",
+        "Schütze",
+        "Steinbock",
+        "Wassermann",
+        "Fische",
+    }
