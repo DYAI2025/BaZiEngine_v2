@@ -1,10 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, Dict, Any
-from datetime import datetime
-
-from .types import BaziInput
-from .constants import STEMS, BRANCHES, ANIMALS
+from .types import BaziInput, Pillar
+from .constants import STEMS, BRANCHES
 from .bazi import compute_bazi
 from .western import compute_western_chart
 from .time_utils import parse_local_iso
@@ -15,6 +13,60 @@ app = FastAPI(
     description="API for BaZi (Chinese Astrology) and Basic Western Astrology calculations.",
     version="0.2.0"
 )
+
+ZODIAC_SIGNS_DE = [
+    "Widder",
+    "Stier",
+    "Zwillinge",
+    "Krebs",
+    "Löwe",
+    "Jungfrau",
+    "Waage",
+    "Skorpion",
+    "Schütze",
+    "Steinbock",
+    "Wassermann",
+    "Fische",
+]
+
+STEM_TO_ELEMENT = {
+    "Jia": "Holz",
+    "Yi": "Holz",
+    "Bing": "Feuer",
+    "Ding": "Feuer",
+    "Wu": "Erde",
+    "Ji": "Erde",
+    "Geng": "Metall",
+    "Xin": "Metall",
+    "Ren": "Wasser",
+    "Gui": "Wasser",
+}
+
+BRANCH_TO_ANIMAL = {
+    "Zi": "Ratte",
+    "Chou": "Ochse",
+    "Yin": "Tiger",
+    "Mao": "Hase",
+    "Chen": "Drache",
+    "Si": "Schlange",
+    "Wu": "Pferd",
+    "Wei": "Ziege",
+    "Shen": "Affe",
+    "You": "Hahn",
+    "Xu": "Hund",
+    "Hai": "Schwein",
+}
+
+
+def format_pillar(pillar: Pillar) -> Dict[str, str]:
+    stem = STEMS[pillar.stem_index]
+    branch = BRANCHES[pillar.branch_index]
+    return {
+        "stamm": stem,
+        "zweig": branch,
+        "tier": BRANCH_TO_ANIMAL[branch],
+        "element": STEM_TO_ELEMENT[stem],
+    }
 
 @app.on_event("startup")
 def ensure_ephemeris_data() -> None:
@@ -60,6 +112,50 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
+
+@app.get("/api")
+def api_endpoint(
+    datum: str = Query(..., description="Datum im Format YYYY-MM-DD"),
+    zeit: str = Query(..., description="Zeit im Format HH:MM[:SS]"),
+    ort: Optional[str] = Query(None, description="Ort als 'lat,lon' oder freier Text"),
+    tz: str = Query("Europe/Berlin", description="Timezone name"),
+    lon: float = Query(13.4050, description="Longitude in degrees"),
+    lat: float = Query(52.52, description="Latitude in degrees"),
+):
+    try:
+        if ort:
+            if "," in ort:
+                parts = [p.strip() for p in ort.split(",", maxsplit=1)]
+                if len(parts) == 2:
+                    lat = float(parts[0])
+                    lon = float(parts[1])
+            else:
+                raise ValueError("Ort muss als 'lat,lon' angegeben werden, wenn gesetzt.")
+
+        dt = parse_local_iso(f"{datum}T{zeit}", tz, strict=True, fold=0)
+        from datetime import timezone
+
+        dt_utc = dt.astimezone(timezone.utc)
+        chart = compute_western_chart(dt_utc, lat, lon)
+        sun = chart.get("bodies", {}).get("Sun")
+        if not sun or "zodiac_sign" not in sun:
+            raise ValueError("Sonnenposition konnte nicht berechnet werden.")
+        sign_index = int(sun["zodiac_sign"])
+        sign_name = ZODIAC_SIGNS_DE[sign_index]
+        return {
+            "sonne": sign_name,
+            "input": {
+                "datum": datum,
+                "zeit": zeit,
+                "ort": ort,
+                "tz": tz,
+                "lat": lat,
+                "lon": lon,
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/calculate/bazi")
 def calculate_bazi_endpoint(req: BaziRequest):
     try:
@@ -78,10 +174,10 @@ def calculate_bazi_endpoint(req: BaziRequest):
         return {
             "input": req.model_dump(),
             "pillars": {
-                "year": str(res.pillars.year),
-                "month": str(res.pillars.month),
-                "day": str(res.pillars.day),
-                "hour": str(res.pillars.hour)
+                "year": format_pillar(res.pillars.year),
+                "month": format_pillar(res.pillars.month),
+                "day": format_pillar(res.pillars.day),
+                "hour": format_pillar(res.pillars.hour),
             },
             "chinese": {
                 "year": {
