@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, Dict, Any
 from .types import BaziInput, Pillar
-from .constants import STEMS, BRANCHES
+from .constants import STEMS, BRANCHES, ANIMALS
 from .bazi import compute_bazi
 from .western import compute_western_chart
 from .time_utils import parse_local_iso
