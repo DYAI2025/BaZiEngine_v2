@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass
 from math import sin, cos, radians, degrees, pi, sqrt, floor
-import swisseph as swe
 
 # =============================================================================
 # PLANET → WU-XING ELEMENT MAPPING
