@@ -1,10 +1,22 @@
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, Literal, Dict, Any
+from typing import Optional, Literal, Dict, Any, List
+from datetime import datetime, timezone
 from .types import BaziInput, Pillar
 from .constants import STEMS, BRANCHES, ANIMALS
 from .bazi import compute_bazi
 from .western import compute_western_chart
+from .fusion import (
+    compute_fusion_analysis,
+    PLANET_TO_WUXING,
+    WUXING_ORDER,
+    WuXingVector,
+    equation_of_time,
+    true_solar_time,
+    calculate_wuxing_from_planets,
+    calculate_wuxing_from_bazi,
+    calculate_harmony_index
+)
 from .time_utils import parse_local_iso
 from .ephemeris import ensure_ephemeris_files
 
@@ -205,13 +217,214 @@ def calculate_western_endpoint(req: WesternRequest):
         # Parse time similar to BaZi
         dt = parse_local_iso(req.date, req.tz, strict=True, fold=0)
         # Convert to utc for ephemeris
-        from datetime import timezone
         dt_utc = dt.astimezone(timezone.utc)
         
         chart = compute_western_chart(dt_utc, req.lat, req.lon)
         return chart
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# =============================================================================
+# FUSION ASTROLOGY ENDPOINTS
+# =============================================================================
+
+class FusionRequest(BaseModel):
+    date: str = Field(..., description="ISO 8601 local date time")
+    tz: str = Field("Europe/Berlin", description="Timezone name")
+    lon: float = Field(..., description="Longitude in degrees")
+    lat: float = Field(..., description="Latitude in degrees")
+    bazi_pillars: Dict[str, Dict[str, str]] = Field(
+        ..., 
+        description="Ba Zi pillars from /calculate/bazi endpoint"
+    )
+
+class FusionResponse(BaseModel):
+    input: Dict[str, Any]
+    wu_xing_vectors: Dict[str, Dict[str, float]]
+    harmony_index: Dict[str, Any]
+    elemental_comparison: Dict[str, Dict[str, float]]
+    cosmic_state: float
+    fusion_interpretation: str
+
+@app.post("/calculate/fusion", response_model=FusionResponse)
+def calculate_fusion_endpoint(req: FusionRequest):
+    """
+    Fusion Astrology Analysis - Wu-Xing + Western Integration.
+    
+    Calculates the harmony between western planetary energies and
+    chinese Ba Zi elemental structure using vector mathematics.
+    
+    Returns:
+    - Wu-Xing vectors for both systems
+    - Harmony Index (0-1 scale)
+    - Element-by-element comparison
+    - Cosmic State metric
+    - Interpretation
+    """
+    try:
+        # Parse time
+        dt = parse_local_iso(req.date, req.tz, strict=True, fold=0)
+        dt_utc = dt.astimezone(timezone.utc)
+        
+        # Get western chart
+        western_chart = compute_western_chart(dt_utc, req.lat, req.lon)
+        
+        # Compute fusion analysis
+        fusion = compute_fusion_analysis(
+            birth_utc_dt=dt_utc,
+            latitude=req.lat,
+            longitude=req.lon,
+            bazi_pillars=req.bazi_pillars,
+            western_bodies=western_chart["bodies"]
+        )
+        
+        return {
+            "input": {
+                "date": req.date,
+                "tz": req.tz,
+                "lon": req.lon,
+                "lat": req.lat
+            },
+            "wu_xing_vectors": fusion["wu_xing_vectors"],
+            "harmony_index": fusion["harmony_index"],
+            "elemental_comparison": fusion["elemental_comparison"],
+            "cosmic_state": fusion["cosmic_state"],
+            "fusion_interpretation": fusion["fusion_interpretation"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+class WxRequest(BaseModel):
+    date: str = Field(..., description="ISO 8601 local date time")
+    tz: str = Field("Europe/Berlin", description="Timezone name")
+    lon: float = Field(..., description="Longitude in degrees")
+    lat: float = Field(..., description="Latitude in degrees")
+
+class WxResponse(BaseModel):
+    input: Dict[str, Any]
+    wu_xing_vector: Dict[str, float]
+    dominant_element: str
+    equation_of_time: float
+    true_solar_time: float
+
+@app.post("/calculate/wuxing", response_model=WxResponse)
+def calculate_wuxing_endpoint(req: WxRequest):
+    """
+    Calculate Wu-Xing Element Vector from Western Planets.
+    
+    Maps planetary positions to Five Elements (Wu Xing) and
+    returns the elemental distribution vector.
+    """
+    try:
+        # Parse time
+        dt = parse_local_iso(req.date, req.tz, strict=True, fold=0)
+        dt_utc = dt.astimezone(timezone.utc)
+        
+        # Get western chart
+        western_chart = compute_western_chart(dt_utc, req.lat, req.lon)
+        
+        # Calculate Wu-Xing vector
+        wx_vector = calculate_wuxing_from_planets(western_chart["bodies"])
+        wx_normalized = wx_vector.normalize()
+        
+        # Get day of year for equation of time
+        day_of_year = dt.timetuple().tm_yday
+        
+        # Calculate TST
+        civil_time_hours = dt.hour + dt.minute / 60
+        TST = true_solar_time(civil_time_hours, req.lon, day_of_year)
+        
+        return {
+            "input": {
+                "date": req.date,
+                "tz": req.tz,
+                "lon": req.lon,
+                "lat": req.lat
+            },
+            "wu_xing_vector": wx_normalized.to_dict(),
+            "dominant_element": max(wx_normalized.to_dict(), key=wx_normalized.to_dict().get),
+            "equation_of_time": equation_of_time(day_of_year),
+            "true_solar_time": TST
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+class TSTRequest(BaseModel):
+    date: str = Field(..., description="ISO 8601 local date time")
+    tz: str = Field("Europe/Berlin", description="Timezone name")
+    lon: float = Field(..., description="Longitude in degrees")
+
+class TSTResponse(BaseModel):
+    input: Dict[str, Any]
+    civil_time_hours: float
+    longitude_correction_hours: float
+    equation_of_time_hours: float
+    true_solar_time_hours: float
+    true_solar_time_formatted: str
+
+@app.post("/calculate/tst", response_model=TSTResponse)
+def calculate_tst_endpoint(req: TSTRequest):
+    """
+    Calculate True Solar Time (TST).
+    
+    Applies Equation of Time and longitude correction to convert
+    civil time to astronomically correct solar time.
+    
+    Essential for accurate Ba Zi hour pillar calculations.
+    """
+    try:
+        # Parse time
+        dt = parse_local_iso(req.date, req.tz, strict=True, fold=0)
+        
+        # Get day of year
+        day_of_year = dt.timetuple().tm_yday
+        
+        # Civil time in hours
+        civil_hours = dt.hour + dt.minute / 60 + dt.second / 3600
+        
+        # Longitude correction
+        delta_t_long = req.lon * 4 / 60  # 4 minutes per degree
+        
+        # Equation of Time
+        E_t = equation_of_time(day_of_year) / 60  # Convert to hours
+        
+        # True Solar Time
+        TST = civil_hours + delta_t_long + E_t
+        TST = TST % 24
+        
+        # Format TST as HH:MM
+        hours = int(TST)
+        minutes = int((TST - hours) * 60)
+        tst_formatted = f"{hours:02d}:{minutes:02d}"
+        
+        return {
+            "input": {
+                "date": req.date,
+                "tz": req.tz,
+                "lon": req.lon
+            },
+            "civil_time_hours": round(civil_hours, 4),
+            "longitude_correction_hours": round(delta_t_long, 4),
+            "equation_of_time_hours": round(E_t, 4),
+            "true_solar_time_hours": round(TST, 4),
+            "true_solar_time_formatted": tst_formatted
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/info/wuxing-mapping")
+def get_wuxing_mapping():
+    """
+    Get the planet to Wu-Xing element mapping used by this API.
+    """
+    return {
+        "mapping": PLANET_TO_WUXING,
+        "order": WUXING_ORDER,
+        "description": {
+            "PLANET_TO_WUXING": "Western planet to Chinese element mapping",
+            "WUXING_ORDER": "Wu Xing cycle order: Holz -> Feuer -> Erde -> Metall -> Wasser"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn
