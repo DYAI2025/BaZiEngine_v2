@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, Dict, Any, List
@@ -13,17 +14,26 @@ from .fusion import (
     WuXingVector,
     equation_of_time,
     true_solar_time,
-    calculate_wuxing_from_planets,
+    calculate_wuxing_vector_from_planets,
     calculate_wuxing_from_bazi,
     calculate_harmony_index
 )
 from .time_utils import parse_local_iso
 from .ephemeris import ensure_ephemeris_files
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler - ensures ephemeris files are available on startup."""
+    ensure_ephemeris_files()
+    yield
+
+
 app = FastAPI(
     title="BaZi Engine v2 API",
     description="API for BaZi (Chinese Astrology) and Basic Western Astrology calculations.",
-    version="0.2.0"
+    version="0.2.0",
+    lifespan=lifespan
 )
 
 ZODIAC_SIGNS_DE = [
@@ -80,9 +90,6 @@ def format_pillar(pillar: Pillar) -> Dict[str, str]:
         "element": STEM_TO_ELEMENT[stem],
     }
 
-@app.on_event("startup")
-def ensure_ephemeris_data() -> None:
-    ensure_ephemeris_files()
 
 class BaziRequest(BaseModel):
     date: str = Field(..., description="ISO 8601 local date time (e.g. 2024-02-10T14:30:00)")
@@ -324,7 +331,7 @@ def calculate_wuxing_endpoint(req: WxRequest):
         western_chart = compute_western_chart(dt_utc, req.lat, req.lon)
         
         # Calculate Wu-Xing vector
-        wx_vector = calculate_wuxing_from_planets(western_chart["bodies"])
+        wx_vector = calculate_wuxing_vector_from_planets(western_chart["bodies"])
         wx_normalized = wx_vector.normalize()
         
         # Get day of year for equation of time
