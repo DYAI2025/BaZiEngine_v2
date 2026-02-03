@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query
+import os
+import hmac
+import hashlib
+import time
+from fastapi import FastAPI, HTTPException, Query, Request, Header
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, Dict, Any, List
 from datetime import datetime, timezone
@@ -432,6 +436,148 @@ def get_wuxing_mapping():
             "WUXING_ORDER": "Wu Xing cycle order: Holz -> Feuer -> Erde -> Metall -> Wasser"
         }
     }
+
+
+# =============================================================================
+# ELEVENLABS WEBHOOK ENDPOINT
+# =============================================================================
+
+class ElevenLabsChartRequest(BaseModel):
+    birthDate: str = Field(..., description="Birth date in YYYY-MM-DD format")
+    birthTime: Optional[str] = Field(None, description="Birth time in HH:MM format (optional)")
+
+
+def verify_elevenlabs_signature(
+    payload: bytes,
+    signature_header: Optional[str],
+    secret: str,
+    tolerance_ms: int = 300000  # 5 minutes
+) -> bool:
+    """Verify HMAC signature from ElevenLabs-Signature header."""
+    if not signature_header:
+        return False
+
+    # Parse signature header: "t=<timestamp>,v1=<signature>"
+    parts = signature_header.split(',')
+    timestamp_part = next((p for p in parts if p.startswith('t=')), None)
+    signature_part = next((p for p in parts if p.startswith('v1=')), None)
+
+    if not timestamp_part or not signature_part:
+        return False
+
+    timestamp = int(timestamp_part.split('=')[1])
+    provided_signature = signature_part.split('=')[1]
+
+    # Check timestamp tolerance
+    now = int(time.time() * 1000)
+    if abs(now - timestamp) > tolerance_ms:
+        return False
+
+    # Compute expected signature
+    signed_payload = f"{timestamp}.".encode() + payload
+    expected_signature = hmac.new(
+        secret.encode(),
+        signed_payload,
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(provided_signature, expected_signature)
+
+
+@app.post("/api/webhooks/chart")
+async def elevenlabs_chart_webhook(
+    request: Request,
+    elevenlabs_signature: Optional[str] = Header(None, alias="elevenlabs-signature")
+):
+    """
+    ElevenLabs Agent Tool: Get Astrology Chart
+
+    Returns Western zodiac sign and Chinese BaZi data for a birth date.
+    Secured with HMAC signature verification.
+    """
+    tool_secret = os.environ.get("ELEVENLABS_TOOL_SECRET")
+
+    if not tool_secret:
+        raise HTTPException(status_code=500, detail="ELEVENLABS_TOOL_SECRET not configured")
+
+    # Get raw body for signature verification
+    raw_body = await request.body()
+
+    # Verify signature
+    if not verify_elevenlabs_signature(raw_body, elevenlabs_signature, tool_secret):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    # Parse request
+    try:
+        import json
+        data = json.loads(raw_body)
+        req = ElevenLabsChartRequest(**data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
+
+    # Build datetime string
+    birth_time = req.birthTime or "12:00"
+    datetime_str = f"{req.birthDate}T{birth_time}:00"
+
+    try:
+        # Parse and calculate
+        dt = parse_local_iso(datetime_str, "Europe/Berlin", strict=False, fold=0)
+        dt_utc = dt.astimezone(timezone.utc)
+
+        # Calculate Western chart
+        western_chart = compute_western_chart(dt_utc, 52.52, 13.405)  # Default: Berlin
+        sun = western_chart.get("bodies", {}).get("Sun", {})
+        moon = western_chart.get("bodies", {}).get("Moon", {})
+
+        sun_sign_idx = int(sun.get("zodiac_sign", 0))
+        moon_sign_idx = int(moon.get("zodiac_sign", 0))
+        sun_sign = ZODIAC_SIGNS_DE[sun_sign_idx]
+        moon_sign = ZODIAC_SIGNS_DE[moon_sign_idx]
+
+        # Calculate BaZi
+        inp = BaziInput(
+            birth_local=datetime_str,
+            timezone="Europe/Berlin",
+            longitude_deg=13.405,
+            latitude_deg=52.52,
+            time_standard="CIVIL",
+            day_boundary="midnight",
+            strict_local_time=False,
+            fold=0
+        )
+        bazi_result = compute_bazi(inp)
+
+        # Format BaZi pillars
+        year_pillar = format_pillar(bazi_result.pillars.year)
+        month_pillar = format_pillar(bazi_result.pillars.month)
+        day_pillar = format_pillar(bazi_result.pillars.day)
+        hour_pillar = format_pillar(bazi_result.pillars.hour)
+
+        return {
+            "western": {
+                "sunSign": sun_sign,
+                "moonSign": moon_sign,
+                "sunSignEnglish": ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                                   "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"][sun_sign_idx],
+            },
+            "eastern": {
+                "yearAnimal": year_pillar["tier"],
+                "yearElement": year_pillar["element"],
+                "monthAnimal": month_pillar["tier"],
+                "dayAnimal": day_pillar["tier"],
+                "dayElement": day_pillar["element"],
+                "dayMaster": day_pillar["stamm"],
+            },
+            "summary": {
+                "sternzeichen": sun_sign,
+                "chinesischesZeichen": f"{year_pillar['element']} {year_pillar['tier']}",
+                "tagesmeister": f"{day_pillar['element']} ({day_pillar['stamm']})",
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
