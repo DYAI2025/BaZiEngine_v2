@@ -487,13 +487,15 @@ def verify_elevenlabs_signature(
 @app.post("/api/webhooks/chart")
 async def elevenlabs_chart_webhook(
     request: Request,
-    elevenlabs_signature: Optional[str] = Header(None, alias="elevenlabs-signature")
+    elevenlabs_signature: Optional[str] = Header(None, alias="elevenlabs-signature"),
+    x_api_key: Optional[str] = Header(None, alias="x-api-key"),
+    authorization: Optional[str] = Header(None)
 ):
     """
     ElevenLabs Agent Tool: Get Astrology Chart
 
     Returns Western zodiac sign and Chinese BaZi data for a birth date.
-    Secured with HMAC signature verification.
+    Supports multiple auth methods: HMAC signature, API key header, or Bearer token.
     """
     tool_secret = os.environ.get("ELEVENLABS_TOOL_SECRET")
 
@@ -503,9 +505,25 @@ async def elevenlabs_chart_webhook(
     # Get raw body for signature verification
     raw_body = await request.body()
 
-    # Verify signature
-    if not verify_elevenlabs_signature(raw_body, elevenlabs_signature, tool_secret):
-        raise HTTPException(status_code=401, detail="Invalid signature")
+    # Try multiple authentication methods
+    auth_valid = False
+
+    # Method 1: HMAC signature (preferred)
+    if elevenlabs_signature:
+        auth_valid = verify_elevenlabs_signature(raw_body, elevenlabs_signature, tool_secret)
+
+    # Method 2: Simple API key header
+    if not auth_valid and x_api_key:
+        auth_valid = hmac.compare_digest(x_api_key, tool_secret)
+
+    # Method 3: Bearer token
+    if not auth_valid and authorization:
+        if authorization.startswith("Bearer "):
+            token = authorization[7:]
+            auth_valid = hmac.compare_digest(token, tool_secret)
+
+    if not auth_valid:
+        raise HTTPException(status_code=401, detail="Invalid authentication")
 
     # Parse request
     try:
